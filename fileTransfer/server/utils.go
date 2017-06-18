@@ -5,11 +5,11 @@ import (
 	"os"
 )
 
-// Habilitar mensagens de depuração
+// Enables debugging messages
 const DEBUG = false
 
-// Quando um erro obtido
-const ERRO_FATAL = "Erro fatal: %s"
+// When an error is thrown
+const FATAL_ERROR = "Fatal error: %s"
 
 
 func debug(s string) {
@@ -20,7 +20,7 @@ func debug(s string) {
 
 func checkError(err error) {
 	if err != nil {
-		fmt.Fprintln(os.Stderr, ERRO_FATAL, err.Error())
+		fmt.Fprintln(os.Stderr, FATAL_ERROR, err.Error())
 		os.Exit(1)
 	}
 }

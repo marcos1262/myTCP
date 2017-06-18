@@ -1,29 +1,26 @@
 package main
 
 import (
-	"net"
 	"strconv"
 	"fmt"
 	"time"
+	"myTCP/myTCP"
 )
 
 func main() {
-	ServerAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10001")
+	serverAddr, err := myTCP.ResolveName("127.0.0.1:10001")
 	checkError(err)
 
-	LocalAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	conn, err := myTCP.Connect(serverAddr)
 	checkError(err)
-
-	Conn, err := net.DialUDP("udp", LocalAddr, ServerAddr)
-	checkError(err)
-	defer Conn.Close()
+	defer conn.Close()
 
 	i := 0
 	for {
 		msg := strconv.Itoa(i)
-		i++
 		buf := []byte(msg)
-		_, err := Conn.Write(buf)
+		i++
+		_, err := conn.Write(buf)
 		if err != nil {
 			fmt.Println(msg, err)
 		}

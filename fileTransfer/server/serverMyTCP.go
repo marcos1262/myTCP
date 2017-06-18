@@ -1,26 +1,24 @@
 package main
 
 import (
-	"net"
 	"fmt"
+	"myTCP/myTCP"
 )
 
 func main() {
-	ServerAddr, err := net.ResolveUDPAddr("udp", ":10001")
+	serverAddr, err := myTCP.ResolveName(":10001")
 	checkError(err)
 
-	ServerConn, err := net.ListenUDP("udp", ServerAddr)
+	serverConn, err := myTCP.Listen(serverAddr)
 	checkError(err)
-	defer ServerConn.Close()
+	defer serverConn.Close()
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, 524)
 
 	for {
-		n, addr, err := ServerConn.ReadFromUDP(buf)
-		fmt.Println("Received ", string(buf[0:n]), " from ", addr)
+		n, addr, err := serverConn.Read(buf)
+		checkError(err)
 
-		if err != nil {
-			fmt.Println("Error: ", err)
-		}
+		fmt.Println("Received ", string(buf[:n]), " (", n, " bytes) from ", addr)
 	}
 }
