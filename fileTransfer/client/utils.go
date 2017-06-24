@@ -6,7 +6,7 @@ import (
 )
 
 // Enables debugging messages
-const DEBUG = false
+const DEBUG = true
 
 // When an error is thrown
 const FATAL_ERROR = "Fatal error: %s"

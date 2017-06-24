@@ -8,13 +8,40 @@ type Header struct {
 	seqNum uint32
 	ackNum uint32
 	connID uint16
-	ACK    bool
-	SYN    bool
-	FIN    bool
+	ack    bool
+	syn    bool
+	fin    bool
 }
 
-func (h *Header) compact() []byte {
-	compact := make([]byte, 12)
+// Decompacts a byte array into a Header
+func newHeader(header [12]byte) *Header {
+	rest := binary.LittleEndian.Uint16(header[10:12])
+
+	return &Header{
+		seqNum: binary.LittleEndian.Uint32(header[0:4]),
+		ackNum: binary.LittleEndian.Uint32(header[4:8]),
+		connID: binary.LittleEndian.Uint16(header[8:10]),
+		ack:    hasBit(int(rest), 2),
+		syn:    hasBit(int(rest), 1),
+		fin:    hasBit(int(rest), 0),
+	}
+}
+
+// FIXME prototype func
+func newDataHeader(seqNum uint32, ackNum uint32, connID uint16) *Header {
+	return &Header{
+		seqNum: seqNum,
+		ackNum: ackNum,
+		connID: connID,
+		ack:    false,
+		syn:    false,
+		fin:    false,
+	}
+}
+
+// Compacts a header into a byte array
+func (h *Header) compact() [12]byte {
+	var compact [12]byte
 
 	seqNumByte := compact[0:4]
 	binary.LittleEndian.PutUint32(seqNumByte, h.seqNum)
@@ -27,30 +54,17 @@ func (h *Header) compact() []byte {
 
 	restByte := compact[10:12]
 	var rest uint16 = 0
-	if h.ACK {
+	if h.ack {
 		setBit(int(rest), 2)
 	}
-	if h.SYN {
+	if h.syn {
 		setBit(int(rest), 1)
 	}
-	if h.FIN {
+	if h.fin {
 		setBit(int(rest), 0)
 	}
 	binary.LittleEndian.PutUint16(restByte, rest)
 	return compact
-}
-
-func decompact(header [12]byte) *Header {
-	rest := binary.LittleEndian.Uint16(header[10:12])
-
-	return &Header{
-		seqNum: binary.LittleEndian.Uint32(header[0:4]),
-		ackNum:binary.LittleEndian.Uint32(header[4:8]),
-		connID:binary.LittleEndian.Uint16(header[8:10]),
-		ACK:hasBit(int(rest), 2),
-		SYN:hasBit(int(rest), 1),
-		FIN:hasBit(int(rest), 0),
-	}
 }
 
 // Sets the bit at pos in the integer n.
