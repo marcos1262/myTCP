@@ -6,19 +6,27 @@ import (
 )
 
 func main() {
-	serverAddr, err := myTCP.ResolveName(":10001")
+	port := "10001"
+	serverAddr, err := myTCP.ResolveName(":"+port)
 	checkError(err)
 
-	serverConn, err := myTCP.Listen(serverAddr)
+	socket, err := myTCP.Listen(serverAddr)
 	checkError(err)
-	defer serverConn.Close()
+	defer socket.Close()
 
 	buf := make([]byte, 524)
 
 	for {
-		n, addr, err := serverConn.Read(buf)
-		checkError(err)
+		debug("Esperando clientes na porta " + port + "...")
+		for {
+			conn, err := socket.Accept()
+			if err != nil {
+				debug("Algum erro ocorreu ao aceitar conexão de cliente")
+				continue
+			}
 
-		fmt.Println("Received ", string(buf[:n]), " (", n, " bytes) from ", addr)
+			debug("Um cliente se conectou")
+			go ReceiveConn(conn)
+		}
 	}
 }

@@ -14,9 +14,19 @@ type Addr struct {
 type Listener struct {
 	addr       *Addr
 	udpConn    *net.UDPConn
-	newConn    chan (Packet)
-	conns      map[string]Conn
+	newConn    chan *Packet
+	conns      map[string]*Conn
 	connsMutex *sync.RWMutex
+}
+
+// newAddr creates a new struct Addr
+func newListener(addr *Addr, udpConn *net.UDPConn) *Listener {
+	return &Listener{
+		addr: addr,
+		udpConn:udpConn,
+		newConn: make(chan *Packet),
+		conns: make(map[string]*Conn),
+	}
 }
 
 // Accept implements the Accept method in the net.Listener interface;
@@ -89,14 +99,15 @@ func ResolveName(addr string) (*Addr, error) {
 // Listen listens to clients
 func Listen(addr *Addr) (*Listener, error) {
 	// TODO start receivePacket, initialize Listener
-	var err error
-	udpConn, err = net.ListenUDP("udp", addr.udpAddr)
+	udpConn, err := net.ListenUDP("udp", addr.udpAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	receivePacket()
-	return nil, nil
+	l := newListener(addr, udpConn)
+	l.receivePacket()
+
+	return l, nil
 }
 
 // Connect connects to a server
@@ -110,8 +121,10 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 }
 
 // receivePacket listens UDP packets and differentiates
-func receivePacket() {
-	debug("Reading a packet")
-	buffer := make([]byte, 524)
-	n, addr, err := .ReadFromUDP(b)
+func (l *Listener) receivePacket() {
+	go func() {
+		debug("Reading a packet")
+		buffer := make([]byte, 524)
+		n, addr, err := .ReadFromUDP(b)
+	}();
 }

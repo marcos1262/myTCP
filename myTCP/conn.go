@@ -7,14 +7,14 @@ var nextID uint16 = 1
 // Conn represents a single client connection
 type Conn struct {
 	ID        uint16
-	newPacket chan (Packet)
+	newPacket chan *Packet
 }
 
 // Creates a new struct Conn
 func newConn(conn *net.UDPConn) *Conn {
 	return &Conn{
 		ID:        generateID(),
-		newPacket: make(chan Packet, )
+		newPacket: make(chan *Packet),
 	}
 }
 
