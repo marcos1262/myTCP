@@ -4,17 +4,17 @@ import "net"
 
 var nextID uint16 = 1
 
-// Wrapper for UDPConn
+// Conn represents a single client connection
 type Conn struct {
-	conn *net.UDPConn
-	ID   uint16
+	ID        uint16
+	newPacket chan (Packet)
 }
 
 // Creates a new struct Conn
 func newConn(conn *net.UDPConn) *Conn {
 	return &Conn{
-		conn: conn,
-		ID:   generateID(),
+		ID:        generateID(),
+		newPacket: make(chan Packet, )
 	}
 }
 

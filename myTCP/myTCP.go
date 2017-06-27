@@ -7,22 +7,29 @@ import (
 
 // Addr is a wrapper for UDPAddr.
 type Addr struct {
-	addr *net.UDPAddr
+	udpAddr *net.UDPAddr
 }
 
 // Listener is a MyTCP network listener.
 type Listener struct {
-	addr Addr
-	conns map[string]Conn
-	connsMutex sync.RWMutex
+	addr       *Addr
+	udpConn    *net.UDPConn
+	newConn    chan (Packet)
+	conns      map[string]Conn
+	connsMutex *sync.RWMutex
 }
 
 // Accept implements the Accept method in the net.Listener interface;
-// it waits for the next client and returns a MyTCP Conn.
+// Accept waits for and returns the next connection to the listener
 func (l *Listener) Accept() (Conn, error) {
-//	TODO Accept: receive request from channel, create connection
-
+	// TODO Accept: receive request from channel, create connection
 	return nil, nil
+}
+
+// Close stops listening on the TCP address.
+// Already Accepted connections are not closed.
+func (l *Listener) Close() {
+	close(l.newConn)
 }
 
 // Packet represents structure
@@ -41,7 +48,7 @@ func (p *Packet) compact() [524]byte {
 
 // newAddr creates a new struct Addr
 func newAddr(addr *net.UDPAddr) *Addr {
-	return &Addr{addr: addr}
+	return &Addr{udpAddr: addr}
 }
 
 // newPacket decompresses a byte array into a Packet struct
@@ -69,7 +76,7 @@ func newDataPacket(payload [512]byte) *Packet {
 
 // String parses to string
 func (a *Addr) String() string {
-	return a.addr.String()
+	return a.udpAddr.String()
 }
 
 // ResolveName parses a host name to IP/Port
@@ -82,9 +89,13 @@ func ResolveName(addr string) (*Addr, error) {
 // Listen listens to clients
 func Listen(addr *Addr) (*Listener, error) {
 	// TODO start receivePacket, initialize Listener
-	//ServerConn, err := net.ListenUDP("udp", addr.addr)
-	//return newConn(ServerConn), err
+	var err error
+	udpConn, err = net.ListenUDP("udp", addr.udpAddr)
+	if err != nil {
+		return nil, err
+	}
 
+	receivePacket()
 	return nil, nil
 }
 
@@ -96,4 +107,11 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 
 	conn, err := net.DialUDP("udp", localAddr, remoteAddr.addr)
 	return newConn(conn), err
+}
+
+// receivePacket listens UDP packets and differentiates
+func receivePacket() {
+	debug("Reading a packet")
+	buffer := make([]byte, 524)
+	n, addr, err := .ReadFromUDP(b)
 }
