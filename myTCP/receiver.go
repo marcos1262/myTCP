@@ -17,25 +17,50 @@ type Listener struct {
 // newAddr creates a new struct Addr.
 func newListener(addr *Addr, udpConn *net.UDPConn) *Listener {
 	return &Listener{
-		addr:    addr,
-		udpConn: udpConn,
-		newConn: make(chan *Packet),
-		conns:   make(map[uint16]*Conn),
+		addr:       addr,
+		udpConn:    udpConn,
+		newConn:    make(chan *Packet),
+		conns:      make(map[uint16]*Conn),
+		connsMutex: &sync.RWMutex{},
 	}
 }
 
 // Accept implements the Accept method in the net.Listener interface;
 // Accept waits for the next connection on a channel and returns it to the listener.
 func (l *Listener) Accept() (*Conn, error) {
+	var conn *Conn
 	for packet := range l.newConn {
-		//	TODO Accept: handshake
+		if packet.header.syn {
+			debug("Receiving SYN packet")
+			var emptyPayload [512]byte = [512]byte{}
+			conn := newConn(nil, packet.sourceAddr)
 
+			debug("Sending SYN-ACK packet")
+			header := newHeader(
+				4321,
+				packet.header.seqNum+1,
+				conn.ID,
+				true, true, false,
+			)
+			packet = newPacket(header, &emptyPayload, l.addr)
+
+			_, err := l.udpConn.WriteToUDP((*packet.compact())[:], conn.remoteAddr.udpAddr)
+			if err != nil {
+				return nil, err
+			}
+		} else if packet.header.ackNum == 4321+1 {
+			debug("Receiving ACK packet")
+
+			l.saveConn(conn)
+			debug("Handshaking DONE")
+
+			break;
+		}
 	}
-	return nil, nil
+	return conn, nil
 }
 
 // Close stops listening on the TCP address.
-// Already Accepted connections are not closed.
 func (l *Listener) Close() {
 	close(l.newConn)
 }
@@ -49,9 +74,16 @@ func (l *Listener) searchConn(connID uint16) (*Conn, bool) {
 	return conn, exists
 }
 
+//
+func (l *Listener) saveConn(conn *Conn) {
+	l.connsMutex.Lock() // Mutual exclusion (writing)
+	l.conns[conn.ID] = conn
+	l.connsMutex.Unlock()
+}
+
 // deleteConn removes a saved connection, searching by the connID.
 func (l *Listener) deleteConn(connID uint16) {
-	l.connsMutex.Lock() // Exclusão mútua (escrita)
+	l.connsMutex.Lock() // Mutual exclusion (writing)
 	delete(l.conns, connID)
 	l.connsMutex.Unlock()
 }
@@ -60,25 +92,31 @@ func (l *Listener) deleteConn(connID uint16) {
 func (l *Listener) listenPacket() {
 	go func() {
 		for {
-			buffer := make([]byte, 524)
-			n, addr, err := l.udpConn.ReadFromUDP(buffer)
-			checkError(err)
+			packetByte, addr := l.readPacket()
 
-			debug("Read a packet")
-
-			var packetByte [524]byte
-			copy(packetByte[:], buffer[:n])
-
-			go l.receivePacket(packetByte, newAddr(addr))
+			go l.receivePacket(packetByte, addr)
 		}
 	}()
 }
 
-// receivePacket differentiates the received packet and forwards it to the right place.
-func (l *Listener) receivePacket(packetByte [524]byte, addr *Addr) {
-	packet := newPacket(packetByte, addr)
+func (l *Listener) readPacket() (*[524]byte, *Addr) {
+	buffer := make([]byte, 524)
+	n, addr, err := l.udpConn.ReadFromUDP(buffer)
+	checkError(err)
 
-	if packet.header.syn {
+	debug("Read a packet OK")
+
+	var packetByte [524]byte
+	copy(packetByte[:], buffer[:n])
+
+	return &packetByte, newAddr(addr)
+}
+
+// receivePacket differentiates the received packet and forwards it to the right place.
+func (l *Listener) receivePacket(packetByte *[524]byte, addr *Addr) {
+	packet := decompactPacket(packetByte, addr)
+
+	if packet.header.syn || packet.header.ackNum == 4321+1 {
 		l.newConn <- packet
 	} else {
 		conn, exists := l.searchConn(packet.header.connID)

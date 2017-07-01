@@ -12,16 +12,17 @@ type Addr struct {
 // Packet represents structure
 type Packet struct {
 	header     *Header
-	payload    [512]byte
+	payload    *[512]byte
 	sourceAddr *Addr
 }
 
 // compact compresses a packet into a byte array
-func (p *Packet) compact() [524]byte {
+func (p *Packet) compact() *[524]byte {
 	var packet [524]byte
 	header := p.header.compact()
-	copy(packet[:], append(header[:], p.payload[:]...))
-	return packet
+
+	copy(packet[:], append((*header)[:], (*p.payload)[:]...))
+	return &packet
 }
 
 // newAddr creates a new struct Addr
@@ -29,29 +30,28 @@ func newAddr(addr *net.UDPAddr) *Addr {
 	return &Addr{udpAddr: addr}
 }
 
-// newPacket decompresses a byte array into a Packet struct
-func newPacket(packet [524]byte, sourceAddr *Addr) *Packet {
-	var header [12]byte
-	copy(header[:], packet[0:12])
-
-	var payload [512]byte
-	copy(payload[:], packet[12:524])
-
+func newPacket(header *Header, payload *[512]byte, sourceAddr *Addr) *Packet {
 	return &Packet{
-		header:     newHeader(header),
+		header:     header,
 		payload:    payload,
 		sourceAddr: sourceAddr,
 	}
 }
 
-// FIXME prototype func
-//func newDataPacket(payload [512]byte) *Packet {
-//	header := newDataHeader(1, 1, 1);
-//	return &Packet{
-//		header:  newHeader(header.compact()),
-//		payload: payload,
-//	}
-//}
+// decompactPacket decompresses a byte array into a Packet struct
+func decompactPacket(packet *[524]byte, sourceAddr *Addr) *Packet {
+	var header [12]byte
+	copy(header[:], (*packet)[0:12])
+
+	var payload [512]byte
+	copy(payload[:], (*packet)[12:524])
+
+	return &Packet{
+		header:     decompactHeader(&header),
+		payload:    &payload,
+		sourceAddr: sourceAddr,
+	}
+}
 
 // String parses to string
 func (a *Addr) String() string {
@@ -84,9 +84,55 @@ func Listen(addr *Addr) (*Listener, error) {
 // Connect connects to a server
 func Connect(remoteAddr *Addr) (*Conn, error) {
 	debug("Connecting to a server")
-	localAddr, err := net.ResolveUDPAddr("udp", remoteAddr.udpAddr.IP.String()+":0")
-	checkError(err)
+	addr, err := net.ResolveUDPAddr("udp", remoteAddr.udpAddr.IP.String()+":0")
+	if err != nil {
+		return nil, err
+	}
+	localAddr := newAddr(addr)
 
-	conn, err := net.DialUDP("udp", localAddr, remoteAddr.udpAddr)
-	return newConn(conn), err
+	conn, err := net.DialUDP("udp", addr, remoteAddr.udpAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	debug("Sending SYN packet")
+	header := newHeader(12345,
+		0,
+		0,
+		false, true, false)
+	var emptyPayload [512]byte = [512]byte{}
+	packet := newPacket(header, &emptyPayload, localAddr)
+
+	_, err = conn.Write((*packet.compact())[:])
+	if err != nil {
+		return nil, err
+	}
+
+	for !packet.header.syn || !packet.header.ack {
+		debug("Waiting SYN-ACK packet")
+		var response [524]byte
+		_, addr, err = conn.ReadFromUDP(response[:])
+		if err != nil {
+			return nil, err
+		}
+
+		packet = decompactPacket(&response, newAddr(addr))
+	}
+
+	debug("Sending ACK packet")
+	header = newHeader(
+		packet.header.ackNum,
+		packet.header.seqNum+1,
+		packet.header.connID,
+		true, false, false,
+	)
+	packet = newPacket(header, &emptyPayload, localAddr)
+
+	_, err = conn.Write((*packet.compact())[:])
+	if err != nil {
+		return nil, err
+	}
+	debug("Handshaking DONE")
+
+	return newConn(conn, remoteAddr), nil
 }

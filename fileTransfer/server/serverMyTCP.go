@@ -1,32 +1,34 @@
 package main
 
 import (
-	"fmt"
 	"myTCP/myTCP"
 )
 
+func ReceiveConn(conn *myTCP.Conn) {
+	debug("Giving client a coffee")
+
+	// TODO receive conn
+}
+
 func main() {
 	port := "10001"
-	serverAddr, err := myTCP.ResolveName(":"+port)
+	serverAddr, err := myTCP.ResolveName(":" + port)
 	checkError(err)
 
 	socket, err := myTCP.Listen(serverAddr)
 	checkError(err)
 	defer socket.Close()
 
-	buf := make([]byte, 524)
+	//buf := make([]byte, 524)
 
 	for {
-		debug("Esperando clientes na porta " + port + "...")
-		for {
-			conn, err := socket.Accept()
-			if err != nil {
-				debug("Algum erro ocorreu ao aceitar conexão de cliente")
-				continue
-			}
-
-			debug("Um cliente se conectou")
-			go ReceiveConn(conn)
+		conn, err := socket.Accept()
+		if err != nil {
+			debug("Something really bad happened while accepting client...")
+			continue
 		}
+
+		debug("A client has connected")
+		go ReceiveConn(conn)
 	}
 }
