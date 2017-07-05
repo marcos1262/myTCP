@@ -63,6 +63,7 @@ func (l *Listener) Accept() (*Conn, error) {
 // Close stops listening on the TCP address.
 func (l *Listener) Close() {
 	close(l.newConn)
+	l.udpConn.Close()
 }
 
 // searchConn searches for a saved connection by the connID.
