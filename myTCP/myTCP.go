@@ -12,17 +12,17 @@ type Addr struct {
 // Packet represents structure
 type Packet struct {
 	header     *Header
-	payload    *[512]byte
+	payload    []byte
 	sourceAddr *Addr
 }
 
 // compact compresses a packet into a byte array
-func (p *Packet) compact() *[524]byte {
+func (p *Packet) compact() []byte {
 	var packet [524]byte
 	header := p.header.compact()
 
-	copy(packet[:], append((*header)[:], (*p.payload)[:]...))
-	return &packet
+	copy(packet[:], append(header[:], p.payload[:]...))
+	return packet[:12+len(p.payload)]
 }
 
 // newAddr creates a new struct Addr
@@ -30,7 +30,7 @@ func newAddr(addr *net.UDPAddr) *Addr {
 	return &Addr{udpAddr: addr}
 }
 
-func newPacket(header *Header, payload *[512]byte, sourceAddr *Addr) *Packet {
+func newPacket(header *Header, payload []byte, sourceAddr *Addr) *Packet {
 	return &Packet{
 		header:     header,
 		payload:    payload,
@@ -39,16 +39,18 @@ func newPacket(header *Header, payload *[512]byte, sourceAddr *Addr) *Packet {
 }
 
 // decompactPacket decompresses a byte array into a Packet struct
-func decompactPacket(packet *[524]byte, sourceAddr *Addr) *Packet {
+func decompactPacket(packet []byte, sourceAddr *Addr) *Packet {
 	var header [12]byte
-	copy(header[:], (*packet)[0:12])
+	copy(header[:], packet[0:12])
 
-	var payload [512]byte
-	copy(payload[:], (*packet)[12:524])
+	var payload = make([]byte, 524)
+	if len(packet) > 12 {
+		copy(payload, packet[12:])
+	}
 
 	return &Packet{
 		header:     decompactHeader(&header),
-		payload:    &payload,
+		payload:    payload[:len(packet)-12],
 		sourceAddr: sourceAddr,
 	}
 }
@@ -100,10 +102,9 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 		0,
 		0,
 		false, true, false)
-	var emptyPayload [512]byte = [512]byte{}
-	packet := newPacket(header, &emptyPayload, localAddr)
+	packet := newPacket(header, nil, localAddr)
 
-	_, err = conn.Write((*packet.compact())[:])
+	_, err = conn.Write(packet.compact())
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +112,12 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 	for !packet.header.syn || !packet.header.ack {
 		debug("Waiting SYN-ACK packet")
 		var response [524]byte
-		_, addr, err = conn.ReadFromUDP(response[:])
+		n, addr, err := conn.ReadFromUDP(response[:])
 		if err != nil {
 			return nil, err
 		}
 
-		packet = decompactPacket(&response, newAddr(addr))
+		packet = decompactPacket(response[:n], newAddr(addr))
 	}
 
 	debug("Sending ACK packet")
@@ -126,9 +127,9 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 		packet.header.connID,
 		true, false, false,
 	)
-	packet = newPacket(header, &emptyPayload, localAddr)
+	packet = newPacket(header, nil, localAddr)
 
-	_, err = conn.Write((*packet.compact())[:])
+	_, err = conn.Write(packet.compact()[:])
 	if err != nil {
 		return nil, err
 	}

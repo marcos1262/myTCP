@@ -98,14 +98,13 @@ func TestReceivePacket(t *testing.T) {
 
 	var l = newListener(addr, udpConn)
 
-	var emptyPayload [512]byte = [512]byte{}
 	header := newHeader(
 		4321,
 		4322,
 		42,
-		true, false, false,
+		true, true, false,
 	)
-	packet := newPacket(header, &emptyPayload, l.addr)
+	packet := newPacket(header, nil, l.addr)
 
 	go func() {
 		p := <-l.newConn
@@ -125,7 +124,7 @@ func TestReceivePacket(t *testing.T) {
 		42,
 		false, false, false,
 	)
-	packet = newPacket(header, &emptyPayload, l.addr)
+	packet = newPacket(header, nil, l.addr)
 
 	go func() {
 		p := <-conn.newPacket
@@ -136,7 +135,7 @@ func TestReceivePacket(t *testing.T) {
 	}()
 
 	l.receivePacket(packet.compact(), addr)
-	//l.Close()
+	l.Close()
 }
 
 func TestListenPacket(t *testing.T) {

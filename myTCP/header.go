@@ -55,12 +55,12 @@ func (h *Header) compact() *[12]byte {
 
 // Decompacts a byte array into a Header
 func decompactHeader(header *[12]byte) *Header {
-	rest := binary.LittleEndian.Uint16((*header)[10:12])
+	rest := binary.LittleEndian.Uint16(header[10:12])
 
 	return &Header{
-		seqNum: binary.LittleEndian.Uint32((*header)[0:4]),
-		ackNum: binary.LittleEndian.Uint32((*header)[4:8]),
-		connID: binary.LittleEndian.Uint16((*header)[8:10]),
+		seqNum: binary.LittleEndian.Uint32(header[0:4]),
+		ackNum: binary.LittleEndian.Uint32(header[4:8]),
+		connID: binary.LittleEndian.Uint16(header[8:10]),
 		ack:    hasBit(int(rest), 2),
 		syn:    hasBit(int(rest), 1),
 		fin:    hasBit(int(rest), 0),

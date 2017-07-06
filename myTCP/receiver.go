@@ -32,8 +32,7 @@ func (l *Listener) Accept() (*Conn, error) {
 	for packet := range l.newConn {
 		if packet.header.syn {
 			debug("Receiving SYN packet")
-			var emptyPayload [512]byte = [512]byte{}
-			conn := newConn(nil, packet.sourceAddr)
+			conn = newConn(nil, packet.sourceAddr)
 
 			debug("Sending SYN-ACK packet")
 			header := newHeader(
@@ -42,9 +41,9 @@ func (l *Listener) Accept() (*Conn, error) {
 				conn.ID,
 				true, true, false,
 			)
-			packet = newPacket(header, &emptyPayload, l.addr)
+			packet = newPacket(header, nil, l.addr)
 
-			_, err := l.udpConn.WriteToUDP((*packet.compact())[:], conn.remoteAddr.udpAddr)
+			_, err := l.udpConn.WriteToUDP(packet.compact(), conn.remoteAddr.udpAddr)
 			if err != nil {
 				return nil, err
 			}
@@ -53,11 +52,10 @@ func (l *Listener) Accept() (*Conn, error) {
 
 			l.saveConn(conn)
 			debug("Handshaking DONE")
-
-			break;
+			return conn, nil
 		}
 	}
-	return conn, nil
+	return nil, nil
 }
 
 // Close stops listening on the TCP address.
@@ -100,21 +98,18 @@ func (l *Listener) listenPacket() {
 	}()
 }
 
-func (l *Listener) readPacket() (*[524]byte, *Addr) {
+func (l *Listener) readPacket() ([]byte, *Addr) {
 	buffer := make([]byte, 524)
 	n, addr, err := l.udpConn.ReadFromUDP(buffer)
 	checkError(err)
 
 	debug("Read a packet OK")
 
-	var packetByte [524]byte
-	copy(packetByte[:], buffer[:n])
-
-	return &packetByte, newAddr(addr)
+	return buffer[:n], newAddr(addr)
 }
 
 // receivePacket differentiates the received packet and forwards it to the right place.
-func (l *Listener) receivePacket(packetByte *[524]byte, addr *Addr) {
+func (l *Listener) receivePacket(packetByte []byte, addr *Addr) {
 	packet := decompactPacket(packetByte, addr)
 
 	if packet.header.syn || packet.header.ackNum == 4321+1 {
