@@ -20,7 +20,7 @@ func debug(s string) {
 
 func checkError(err error) {
 	if err != nil {
-		fmt.Fprintln(os.Stderr, FATAL_ERROR, err.Error())
+		fmt.Fprintln(os.Stderr, fmt.Sprintf(FATAL_ERROR, err.Error()))
 		os.Exit(1)
 	}
 }

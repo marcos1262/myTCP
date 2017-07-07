@@ -133,5 +133,5 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 	}
 	debug("Handshaking DONE")
 
-	return newConn(conn, remoteAddr), nil
+	return newConn(conn, remoteAddr, packet.header.connID), nil
 }

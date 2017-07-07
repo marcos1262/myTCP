@@ -1,13 +1,12 @@
 package main
 
 import (
-	//"myTCP/myTCP"
 	"bufio"
 	"fmt"
-	"net"
 	"os"
 	"io"
 	"strconv"
+	"myTCP/myTCP"
 )
 
 // Wait for server message and show to client
@@ -33,26 +32,26 @@ func main() {
 	//	os.Exit(1)
 	//}
 
-	//serverAddr, err := myTCP.ResolveName(host + ":" + port)
-	serverAddr, err := net.ResolveTCPAddr("tcp", host+":"+port)
+	serverAddr, err := myTCP.ResolveName(host + ":" + port)
+	//serverAddr, err := net.ResolveTCPAddr("tcp", host+":"+port)
 	checkError(err)
 
-	// FIXME remove me
-	localAddr, err := net.ResolveTCPAddr("tcp", host+":0")
-	checkError(err)
+	//// for TCP version
+	//localAddr, err := net.ResolveTCPAddr("tcp", host+":0")
+	//checkError(err)
 
-	//conn, err := myTCP.Connect(serverAddr)
-	conn, err := net.DialTCP("tcp", localAddr, serverAddr)
+	conn, err := myTCP.Connect(serverAddr)
+	//conn, err := net.DialTCP("tcp", localAddr, serverAddr)
 	checkError(err)
 	defer conn.Close()
 
-	in := bufio.NewReader(conn)
-	out := bufio.NewWriter(conn)
+	//in := bufio.NewReader(conn)
+	//out := bufio.NewWriter(conn)
 
 	debug("Connected with server at " + host + " " + port)
 
-	debug("Waiting for some server message")
-	go ListenServer(in)
+	//debug("Waiting for some server message")
+	//go ListenServer(in)
 
 	debug("Opening file " + filename)
 	file, err := os.Open(filename)
@@ -60,8 +59,8 @@ func main() {
 	defer file.Close()
 
 	debug("Send file to server")
-	n, err := io.Copy(out, file)
+	n, err := io.Copy(conn, file)
 	checkError(err)
 
-	debug("Sent " + strconv.Itoa(int(n)) + " to server")
+	debug("Sent " + strconv.Itoa(int(n)) + " bytes to server")
 }

@@ -29,7 +29,7 @@ func checkError(err error) {
 			fmt.Println(SERVER_DISCONNECTED)
 			os.Exit(0)
 		}
-		fmt.Fprintln(os.Stderr, FATAL_ERROR, err.Error())
+		fmt.Fprintln(os.Stderr, fmt.Sprintf(FATAL_ERROR, err.Error()))
 		os.Exit(1)
 	}
 }

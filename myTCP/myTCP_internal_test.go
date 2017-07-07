@@ -114,9 +114,9 @@ func TestReceivePacket(t *testing.T) {
 		return
 	}()
 
-	l.receivePacket(packet.compact(), addr)
+	l.demultiplexer(packet.compact(), addr)
 
-	conn := newConn(nil, addr)
+	conn := newConn(nil, addr, 0)
 	l.conns[1] = conn
 	header = newHeader(
 		4321,
@@ -134,7 +134,7 @@ func TestReceivePacket(t *testing.T) {
 		return
 	}()
 
-	l.receivePacket(packet.compact(), addr)
+	l.demultiplexer(packet.compact(), addr)
 	l.Close()
 }
 
@@ -144,7 +144,7 @@ func TestListenPacket(t *testing.T) {
 	//		for {
 	//			packetByte, addr := l.readPacket()
 	//
-	//			go l.receivePacket(packetByte, addr)
+	//			go l.demultiplexer(packetByte, addr)
 	//		}
 	//	}()
 	//}

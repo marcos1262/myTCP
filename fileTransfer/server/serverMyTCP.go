@@ -1,8 +1,7 @@
 package main
 
 import (
-	//"myTCP/myTCP"
-	"net"
+	"myTCP/myTCP"
 	"sync"
 	"os"
 )
@@ -36,8 +35,8 @@ func deleteClient(ID uint16) {
 }
 
 // Receive client on the server.
-//func ReceiveConn(conn myTCP.Conn) {
-func ReceiveConn(conn net.Conn) {
+func ReceiveConn(conn myTCP.Conn) {
+//func ReceiveConn(conn net.Conn) {
 	debug("Giving client a coffee")
 
 	saveClient(newClient(conn))
@@ -54,13 +53,13 @@ func main() {
 	//	os.Exit(1)
 	//}
 
-	//serverAddr, err := myTCP.ResolveName(":" + port)
-	serverAddr, err := net.ResolveTCPAddr("tcp", ":"+port)
+	serverAddr, err := myTCP.ResolveName(":" + port)
+	//serverAddr, err := net.ResolveTCPAddr("tcp", ":"+port)
 
 	checkError(err)
 
-	//socket, err := myTCP.Listen(serverAddr)
-	socket, err := net.ListenTCP("tcp", serverAddr)
+	socket, err := myTCP.Listen(serverAddr)
+	//socket, err := net.ListenTCP("tcp", serverAddr)
 	checkError(err)
 	defer socket.Close()
 

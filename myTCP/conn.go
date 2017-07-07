@@ -3,6 +3,8 @@ package myTCP
 import (
 	"net"
 	"time"
+	"strconv"
+	"io"
 )
 
 var nextID uint16 = 1
@@ -16,20 +18,25 @@ type Conn struct {
 	timeout    chan bool    // Only for MyTCP Server
 }
 
-// newConn creates a new struct Conn
-func newConn(conn *net.UDPConn, remoteAddr *Addr) *Conn {
-	newConn := &Conn{
-		ID:         generateID(),
+// Create a new struct Conn.
+func newConn(conn *net.UDPConn, remoteAddr *Addr, id uint16) *Conn {
+	if id == 0 {
+		if conn == nil && remoteAddr == nil {
+			return &Conn{}
+		}
+		id = generateID()
+	}
+
+	return &Conn{
+		ID:         id,
 		newPacket:  make(chan *Packet),
 		remoteAddr: remoteAddr,
 		udpConn:    conn,
 		timeout:    make(chan bool, 1),
 	}
-
-	return newConn
 }
 
-// Close closes a connection, checking for errors
+// Close a connection, checking for errors.
 func (c *Conn) Close() error {
 	debug("Closing connection")
 	if c.udpConn != nil {
@@ -41,40 +48,96 @@ func (c *Conn) Close() error {
 	return nil
 }
 
-// Read takes a packet from a connection, copying the payload into p
-func (c *Conn) Read(p []byte) (n int, err error) {
-	//for packet := range c.newPacket {
-	//	//	//	TODO Read: coordinate receiving of packets, create packet/payload BUFFER, return only until the requested size
-	//	//
-	//}
-	//n, addr, err := c.conn.ReadFromUDP(b)
-	//return n, newAddr(addr), err
-	return 0, nil
+// Take a packet from a connection, copying the payload into p
+func (c Conn) Read(p []byte) (n int, err error) {
+	debug("READING " + strconv.Itoa(len(p)) + " bytes")
+	//	TODO Read: coordinate receiving of packets, create packet/payload BUFFER, return only until the requested size
+
+	for packet := range c.newPacket {
+		payload := packet.payload
+
+		// TODO detect fin and return EOF
+		//if len(payload) == 0{
+		//	break
+		//}
+
+		copy(p[n:n+len(payload)], payload)
+
+		debug("A: " + string(payload))
+		debug("B: " + string(p[n:n+len(payload)]))
+
+		n += len(payload)
+
+		// TODO send ACK
+
+		// TODO keep payload rest, if it doesnt fit in p buffer
+
+		if len(payload) < 512 {
+			debug("LITTLE MESSAGE")
+			err = io.EOF
+			break
+		}
+
+		if n >= len(p) {
+			break
+		}
+		//if len(p) <= 512 {
+		//	debug("LITTLE MESSAGE")
+		//
+		//} else {
+		//	debug("BIG MESSAGE")
+		//
+		//
+		//
+		//	panic("IIIIIIIIIII")
+		//}
+	}
+
+	debug("OK")
+
+	// TODO verifies when Copy func stops reading
+	//c.Close()
+
+	// TODO catch some error
+	return n, err
 }
 
-// Writes a packet to a connection
-func (c *Conn) Write(b []byte) (int, error) {
-	var packet [524]byte
-
+// Write a packet to a connection
+func (c Conn) Write(p []byte) (int, error) {
+	debug("WRITING " + strconv.Itoa(len(p)) + " bytes : " + string(p))
 	// TODO Write: coordinate sending of packets, break bytes on packets
 
-	if len(b) < 512 {
+	var qtd_wrote int
+
+	if len(p) <= 512 {
 		debug("LITTLE MESSAGE")
 
-		var data [512]byte
-		copy(data[:], b)
+		payload := make([]byte, len(p))
+		copy(payload[:], p)
 
-		//packet = newDataPacket(data).compact()
+		header := newHeader(24524, 1231241, c.ID,
+			false, false, false)
+		addr, err := ResolveName("127.0.0.1:0")
+		if err != nil {
+			return 0, nil
+		}
+		packet := newPacket(header, payload, addr).compact()
+
+		n, err := c.udpConn.Write(packet)
+		qtd_wrote += n - 12
+		if err != nil {
+			return 0, nil
+		}
 	} else {
 		debug("BIG MESSAGE")
 
 		var data [512]byte
-		copy(data[:], b)
+		copy(data[:], p[qtd_wrote:qtd_wrote+512])
 
-		//packet = newDataPacket(data).compact()
+		panic("AAAAAAAAAAAA")
 	}
 
-	return c.udpConn.Write(packet[:])
+	return qtd_wrote, nil
 }
 
 func generateID() uint16 {

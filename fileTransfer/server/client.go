@@ -1,27 +1,25 @@
 package main
 
 import (
-	"bufio"
-	"net"
-	//"myTCP/myTCP"
 	"strconv"
 	"os"
 	"io"
+	"myTCP/myTCP"
 )
 
-// FIXME remove me
-var nextID uint16 = 1
-
-func generateID() uint16 {
-	nextID++
-	return nextID - 1
-}
+//// for TCP version
+//var nextID uint16 = 1
+//
+//func generateID() uint16 {
+//	nextID++
+//	return nextID - 1
+//}
 
 type Client struct {
-	ID uint16
-	//conn myTCP.Conn
-	conn net.Conn
-	in   *bufio.Reader
+	ID   uint16
+	conn myTCP.Conn
+	//conn net.Conn
+	//in *bufio.Reader
 	//out  *bufio.Writer
 }
 
@@ -40,9 +38,13 @@ func (c *Client) Read() {
 	file, err := os.Create(dir + "/" + strconv.Itoa(int(c.ID)) + ".file")
 	checkError(err)
 	defer file.Close()
-	io.Copy(file, c.in)
 
-	c.in = nil // Closing network stream
+	n, err := io.Copy(file, c.conn)
+	checkError(err)
+
+	debug("Received " + strconv.Itoa(int(n)) + " bytes from client " + strconv.Itoa(int(c.ID)))
+
+	//c.in = nil // Closing network stream
 }
 
 //// Send data to client
@@ -51,13 +53,13 @@ func (c *Client) Read() {
 //}
 
 // Create a new Client.
-//func newClient(conn myTCP.Conn) *Client {
-func newClient(conn net.Conn) *Client {
+func newClient(conn myTCP.Conn) *Client {
+	//func newClient(conn net.Conn) *Client {
 	client := &Client{
-		//ID: conn.ID,
-		ID:   generateID(),
+		ID: conn.ID,
+		//ID:   generateID(),
 		conn: conn,
-		in:   bufio.NewReader(conn),
+		//in:   bufio.NewReader(conn),
 		//out:  bufio.NewWriter(conn),
 	}
 

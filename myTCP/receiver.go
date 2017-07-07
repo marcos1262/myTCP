@@ -3,6 +3,7 @@ package myTCP
 import (
 	"sync"
 	"net"
+	"strconv"
 )
 
 // Listener is a MyTCP network listener.
@@ -27,12 +28,12 @@ func newListener(addr *Addr, udpConn *net.UDPConn) *Listener {
 
 // Accept implements the Accept method in the net.Listener interface;
 // Accept waits for the next connection on a channel and returns it to the listener.
-func (l *Listener) Accept() (*Conn, error) {
-	var conn *Conn
+func (l *Listener) Accept() (Conn, error) {
+	var conn Conn
 	for packet := range l.newConn {
 		if packet.header.syn {
 			debug("Receiving SYN packet")
-			conn = newConn(nil, packet.sourceAddr)
+			conn = *newConn(nil, packet.sourceAddr, 0)
 
 			debug("Sending SYN-ACK packet")
 			header := newHeader(
@@ -45,17 +46,17 @@ func (l *Listener) Accept() (*Conn, error) {
 
 			_, err := l.udpConn.WriteToUDP(packet.compact(), conn.remoteAddr.udpAddr)
 			if err != nil {
-				return nil, err
+				return *newConn(nil, nil, 0), err
 			}
 		} else if packet.header.ackNum == 4321+1 {
 			debug("Receiving ACK packet")
 
-			l.saveConn(conn)
+			l.saveConn(&conn)
 			debug("Handshaking DONE")
 			return conn, nil
 		}
 	}
-	return nil, nil
+	return *newConn(nil, nil, 0), nil
 }
 
 // Close stops listening on the TCP address.
@@ -93,11 +94,12 @@ func (l *Listener) listenPacket() {
 		for {
 			packetByte, addr := l.readPacket()
 
-			go l.receivePacket(packetByte, addr)
+			go l.demultiplexer(packetByte, addr)
 		}
 	}()
 }
 
+// Get packet from network.
 func (l *Listener) readPacket() ([]byte, *Addr) {
 	buffer := make([]byte, 524)
 	n, addr, err := l.udpConn.ReadFromUDP(buffer)
@@ -108,15 +110,17 @@ func (l *Listener) readPacket() ([]byte, *Addr) {
 	return buffer[:n], newAddr(addr)
 }
 
-// receivePacket differentiates the received packet and forwards it to the right place.
-func (l *Listener) receivePacket(packetByte []byte, addr *Addr) {
+// Differentiate the received packet and forwards it to the right place.
+func (l *Listener) demultiplexer(packetByte []byte, addr *Addr) {
 	packet := decompactPacket(packetByte, addr)
 
 	if packet.header.syn || packet.header.ackNum == 4321+1 {
 		l.newConn <- packet
 	} else {
 		conn, exists := l.searchConn(packet.header.connID)
+		debug("Cli: "+strconv.FormatBool(exists))
 		if exists {
+			debug("ID: "+strconv.Itoa(int(conn.ID)))
 			conn.newPacket <- packet
 		} else {
 			// PACKET WITHOUT SYN WITHOUT KNOWN ID
