@@ -98,9 +98,7 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 	}
 
 	debug("Sending SYN packet")
-	header := newHeader(12345,
-		0,
-		0,
+	header := newHeader(12345, 0, 0,
 		false, true, false)
 	packet := newPacket(header, nil, localAddr)
 

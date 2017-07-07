@@ -1,26 +1,67 @@
 package main
 
 import (
-	"myTCP/myTCP"
+	//"myTCP/myTCP"
+	"bufio"
+	"fmt"
+	"net"
+	"os"
+	"io"
+	"strconv"
 )
 
+// Wait for server message and show to client
+func ListenServer(in *bufio.Reader) {
+	for {
+		data, err := receiveData(in, 4096)
+		checkError(err)
+
+		fmt.Printf(string(data))
+	}
+	in = nil
+}
+
 func main() {
-	serverAddr, err := myTCP.ResolveName("127.0.0.1:10001")
+	host, port, filename := "127.0.0.1", "10101", "test.txt"
+	//flag.StringVar(&host, "h", "", "Give a hostname with -h=#####")
+	//flag.StringVar(&port, "p", "", "Give a port with -p=#####")
+	//flag.StringVar(&filename, "f", "", "Give a filename with -f=#####")
+	//flag.Parse()
+	//
+	//if port == "" || host == "" || filename == "" {
+	//	flag.PrintDefaults()
+	//	os.Exit(1)
+	//}
+
+	//serverAddr, err := myTCP.ResolveName(host + ":" + port)
+	serverAddr, err := net.ResolveTCPAddr("tcp", host+":"+port)
 	checkError(err)
 
-	conn, err := myTCP.Connect(serverAddr)
+	// FIXME remove me
+	localAddr, err := net.ResolveTCPAddr("tcp", host+":0")
+	checkError(err)
+
+	//conn, err := myTCP.Connect(serverAddr)
+	conn, err := net.DialTCP("tcp", localAddr, serverAddr)
 	checkError(err)
 	defer conn.Close()
 
-	//i := 0
-	//for {
-	//	msg := strconv.Itoa(i)
-	//	buf := []byte(msg)
-	//	i++
-	//	_, err := conn.Write(buf)
-	//	if err != nil {
-	//		fmt.Println(msg, err)
-	//	}
-	//	time.Sleep(time.Second * 1)
-	//}
+	in := bufio.NewReader(conn)
+	out := bufio.NewWriter(conn)
+
+	debug("Connected with server at " + host + " " + port)
+
+	debug("Waiting for some server message")
+	go ListenServer(in)
+
+	debug("Opening file " + filename)
+	file, err := os.Open(filename)
+	checkError(err)
+	defer file.Close()
+
+	debug("Send file to server")
+	n, err := io.Copy(out, file)
+	checkError(err)
+
+	debug("Sent " + strconv.Itoa(int(n)) + " to server")
 }

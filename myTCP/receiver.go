@@ -73,7 +73,7 @@ func (l *Listener) searchConn(connID uint16) (*Conn, bool) {
 	return conn, exists
 }
 
-//
+// Save a connection on the list.
 func (l *Listener) saveConn(conn *Conn) {
 	l.connsMutex.Lock() // Mutual exclusion (writing)
 	l.conns[conn.ID] = conn

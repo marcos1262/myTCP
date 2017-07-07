@@ -17,14 +17,13 @@ type Conn struct {
 }
 
 // newConn creates a new struct Conn
-// - param ttl in seconds
 func newConn(conn *net.UDPConn, remoteAddr *Addr) *Conn {
 	newConn := &Conn{
 		ID:         generateID(),
 		newPacket:  make(chan *Packet),
 		remoteAddr: remoteAddr,
 		udpConn:    conn,
-		timeout:make(chan bool, 1),
+		timeout:    make(chan bool, 1),
 	}
 
 	return newConn
@@ -83,7 +82,7 @@ func generateID() uint16 {
 	return nextID - 1
 }
 
-func (c*Conn) connTimeout(timeSeconds time.Duration) {
+func (c *Conn) connTimeout(timeSeconds time.Duration) {
 	time.Sleep(timeSeconds * time.Second)
 	c.timeout <- true
 }
