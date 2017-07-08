@@ -17,7 +17,7 @@ import (
 
 type Client struct {
 	ID   uint16
-	conn myTCP.Conn
+	conn myTCP.ConnClient
 	//conn net.Conn
 	//in *bufio.Reader
 	//out  *bufio.Writer
@@ -53,14 +53,14 @@ func (c *Client) Read() {
 //}
 
 // Create a new Client.
-func newClient(conn myTCP.Conn) *Client {
-	//func newClient(conn net.Conn) *Client {
+func newClient(connClient myTCP.ConnClient) *Client {
+	//func newClient(connClient net.Conn) *Client {
 	client := &Client{
-		ID: conn.ID,
+		ID: connClient.ID,
 		//ID:   generateID(),
-		conn: conn,
-		//in:   bufio.NewReader(conn),
-		//out:  bufio.NewWriter(conn),
+		conn: connClient,
+		//in:   bufio.NewReader(connClient),
+		//out:  bufio.NewWriter(connClient),
 	}
 
 	go client.Read()

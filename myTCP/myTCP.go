@@ -84,7 +84,7 @@ func Listen(addr *Addr) (*Listener, error) {
 }
 
 // Connect connects to a server
-func Connect(remoteAddr *Addr) (*Conn, error) {
+func Connect(remoteAddr *Addr) (*ConnServer, error) {
 	debug("Connecting to a server")
 	addr, err := net.ResolveUDPAddr("udp", remoteAddr.udpAddr.IP.String()+":0")
 	if err != nil {
@@ -92,7 +92,7 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 	}
 	localAddr := newAddr(addr)
 
-	conn, err := net.DialUDP("udp", addr, remoteAddr.udpAddr)
+	udpConn, err := net.DialUDP("udp", addr, remoteAddr.udpAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 		false, true, false)
 	packet := newPacket(header, nil, localAddr)
 
-	_, err = conn.Write(packet.compact())
+	_, err = udpConn.Write(packet.compact())
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 	for !packet.header.syn || !packet.header.ack {
 		debug("Waiting SYN-ACK packet")
 		var response [524]byte
-		n, addr, err := conn.ReadFromUDP(response[:])
+		n, addr, err := udpConn.ReadFromUDP(response[:])
 		if err != nil {
 			return nil, err
 		}
@@ -127,11 +127,13 @@ func Connect(remoteAddr *Addr) (*Conn, error) {
 	)
 	packet = newPacket(header, nil, localAddr)
 
-	_, err = conn.Write(packet.compact()[:])
+	_, err = udpConn.Write(packet.compact()[:])
 	if err != nil {
 		return nil, err
 	}
 	debug("Handshaking DONE")
 
-	return newConn(conn, remoteAddr, packet.header.connID), nil
+	conn := newConnServer(udpConn, remoteAddr, packet.header.connID)
+
+	return conn, nil
 }

@@ -9,49 +9,62 @@ import (
 
 var nextID uint16 = 1
 
-// Conn represents a single client connection
-type Conn struct {
+//type Conn interface {
+//	Read(p []byte) (n int, err error)
+//	Write(p []byte) (n int, err error)
+//	Close() error
+//}
+
+// conn represents a single client connection
+type conn struct {
 	ID         uint16
-	newPacket  chan *Packet
 	remoteAddr *Addr
-	udpConn    *net.UDPConn // Only for MyTCP Client
-	timeout    chan bool    // Only for MyTCP Server
 }
 
-// Create a new struct Conn.
-func newConn(conn *net.UDPConn, remoteAddr *Addr, id uint16) *Conn {
-	if id == 0 {
-		if conn == nil && remoteAddr == nil {
-			return &Conn{}
-		}
-		id = generateID()
-	}
+type ConnServer struct {
+	*conn
+	udpConn *net.UDPConn
+}
 
-	return &Conn{
-		ID:         id,
-		newPacket:  make(chan *Packet),
-		remoteAddr: remoteAddr,
-		udpConn:    conn,
-		timeout:    make(chan bool, 1),
+type ConnClient struct {
+	*conn
+	newPacket chan *Packet
+	timeout   chan bool
+}
+
+// Create a new struct ConnServer.
+func newConnServer(udpConn *net.UDPConn, remoteAddr *Addr, id uint16) *ConnServer {
+	return &ConnServer{
+		conn: &conn{
+			ID:         id,
+			remoteAddr: remoteAddr,
+		},
+		udpConn: udpConn,
 	}
 }
 
-// Close a connection, checking for errors.
-func (c *Conn) Close() error {
-	debug("Closing connection")
-	if c.udpConn != nil {
-		return c.udpConn.Close()
+// Create a new struct ConnClient.
+func newConnClient(remoteAddr *Addr) *ConnClient {
+	return &ConnClient{
+		conn: &conn{
+			ID:         generateID(),
+			remoteAddr: remoteAddr,
+		},
+		newPacket: make(chan *Packet),
+		timeout:   make(chan bool, 1),
 	}
+}
 
-	//	 TODO Conn: close connection, remove from listener if it is a server conn
-
-	return nil
+func (c conn) RemoteAddr() *Addr {
+	return c.remoteAddr
 }
 
 // Take a packet from a connection, copying the payload into p
-func (c Conn) Read(p []byte) (n int, err error) {
+func (c ConnClient) Read(p []byte) (n int, err error) {
 	debug("READING " + strconv.Itoa(len(p)) + " bytes")
-	//	TODO Read: coordinate receiving of packets, create packet/payload BUFFER, return only until the requested size
+	//	TODO Read: coordinate receiving of packets,
+	// 				create packet/payload BUFFER,
+	// 				return only until the requested size
 
 	for packet := range c.newPacket {
 		payload := packet.payload
@@ -102,8 +115,33 @@ func (c Conn) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
+// TODO implement ConnClient Write
+func (c ConnClient) Write(p []byte) (n int, err error) {
+	return 0, nil
+}
+
+// Close a connection, checking for errors.
+func (c ConnClient) Close() error {
+	debug("Closing connection")
+
+	// TODO conn: close connection, remove from listener if it is a server conn
+
+	close(c.newPacket)
+	return nil
+}
+
+func (c *ConnClient) connTimeout(timeSeconds time.Duration) {
+	time.Sleep(timeSeconds * time.Second)
+	c.timeout <- true
+}
+
+// TODO implement ConnServer Read
+func (c ConnServer) Read(p []byte) (n int, err error) {
+	return 0, nil
+}
+
 // Write a packet to a connection
-func (c Conn) Write(p []byte) (int, error) {
+func (c ConnServer) Write(p []byte) (n int, err error) {
 	debug("WRITING " + strconv.Itoa(len(p)) + " bytes : " + string(p))
 	// TODO Write: coordinate sending of packets, break bytes on packets
 
@@ -140,12 +178,16 @@ func (c Conn) Write(p []byte) (int, error) {
 	return qtd_wrote, nil
 }
 
+// Close a connection, checking for errors.
+func (c *ConnServer) Close() error {
+	debug("Closing connection")
+
+	// TODO conn: close connection, remove from listener if it is a server conn
+
+	return c.udpConn.Close()
+}
+
 func generateID() uint16 {
 	nextID++
 	return nextID - 1
-}
-
-func (c *Conn) connTimeout(timeSeconds time.Duration) {
-	time.Sleep(timeSeconds * time.Second)
-	c.timeout <- true
 }

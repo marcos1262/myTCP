@@ -35,8 +35,8 @@ func deleteClient(ID uint16) {
 }
 
 // Receive client on the server.
-func ReceiveConn(conn myTCP.Conn) {
-//func ReceiveConn(conn net.Conn) {
+func ReceiveConn(conn myTCP.ConnClient) {
+	//func ReceiveConn(conn net.Conn) {
 	debug("Giving client a coffee")
 
 	saveClient(newClient(conn))

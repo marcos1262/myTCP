@@ -3,7 +3,6 @@ package myTCP
 import (
 	"sync"
 	"net"
-	"strconv"
 )
 
 // Listener is a MyTCP network listener.
@@ -11,7 +10,7 @@ type Listener struct {
 	addr       *Addr
 	udpConn    *net.UDPConn
 	newConn    chan *Packet
-	conns      map[uint16]*Conn
+	conns      map[uint16]*ConnClient
 	connsMutex *sync.RWMutex
 }
 
@@ -21,19 +20,18 @@ func newListener(addr *Addr, udpConn *net.UDPConn) *Listener {
 		addr:       addr,
 		udpConn:    udpConn,
 		newConn:    make(chan *Packet),
-		conns:      make(map[uint16]*Conn),
+		conns:      make(map[uint16]*ConnClient),
 		connsMutex: &sync.RWMutex{},
 	}
 }
 
-// Accept implements the Accept method in the net.Listener interface;
-// Accept waits for the next connection on a channel and returns it to the listener.
-func (l *Listener) Accept() (Conn, error) {
-	var conn Conn
+// Wait for the next connection on a channel and return it to the listener.
+func (l *Listener) Accept() (ConnClient, error) {
+	var conn ConnClient
 	for packet := range l.newConn {
 		if packet.header.syn {
 			debug("Receiving SYN packet")
-			conn = *newConn(nil, packet.sourceAddr, 0)
+			conn = *newConnClient(packet.sourceAddr)
 
 			debug("Sending SYN-ACK packet")
 			header := newHeader(
@@ -46,7 +44,7 @@ func (l *Listener) Accept() (Conn, error) {
 
 			_, err := l.udpConn.WriteToUDP(packet.compact(), conn.remoteAddr.udpAddr)
 			if err != nil {
-				return *newConn(nil, nil, 0), err
+				return ConnClient{}, err
 			}
 		} else if packet.header.ackNum == 4321+1 {
 			debug("Receiving ACK packet")
@@ -56,7 +54,7 @@ func (l *Listener) Accept() (Conn, error) {
 			return conn, nil
 		}
 	}
-	return *newConn(nil, nil, 0), nil
+	return ConnClient{}, nil
 }
 
 // Close stops listening on the TCP address.
@@ -66,7 +64,7 @@ func (l *Listener) Close() {
 }
 
 // searchConn searches for a saved connection by the connID.
-func (l *Listener) searchConn(connID uint16) (*Conn, bool) {
+func (l *Listener) searchConn(connID uint16) (*ConnClient, bool) {
 	l.connsMutex.RLock() // Mutual exclusion (reading)
 	conn, exists := l.conns[connID]
 	l.connsMutex.RUnlock()
@@ -75,7 +73,7 @@ func (l *Listener) searchConn(connID uint16) (*Conn, bool) {
 }
 
 // Save a connection on the list.
-func (l *Listener) saveConn(conn *Conn) {
+func (l *Listener) saveConn(conn *ConnClient) {
 	l.connsMutex.Lock() // Mutual exclusion (writing)
 	l.conns[conn.ID] = conn
 	l.connsMutex.Unlock()
@@ -105,8 +103,6 @@ func (l *Listener) readPacket() ([]byte, *Addr) {
 	n, addr, err := l.udpConn.ReadFromUDP(buffer)
 	checkError(err)
 
-	debug("Read a packet OK")
-
 	return buffer[:n], newAddr(addr)
 }
 
@@ -118,9 +114,7 @@ func (l *Listener) demultiplexer(packetByte []byte, addr *Addr) {
 		l.newConn <- packet
 	} else {
 		conn, exists := l.searchConn(packet.header.connID)
-		debug("Cli: "+strconv.FormatBool(exists))
 		if exists {
-			debug("ID: "+strconv.Itoa(int(conn.ID)))
 			conn.newPacket <- packet
 		} else {
 			// PACKET WITHOUT SYN WITHOUT KNOWN ID
