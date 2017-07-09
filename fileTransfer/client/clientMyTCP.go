@@ -58,6 +58,8 @@ func main() {
 	checkError(err)
 	defer file.Close()
 
+	// TODO check size limit 100MB
+
 	debug("Send file to server")
 	n, err := io.Copy(conn, file)
 	checkError(err)

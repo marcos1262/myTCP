@@ -9,50 +9,9 @@ type Addr struct {
 	udpAddr *net.UDPAddr
 }
 
-// Packet represents structure
-type Packet struct {
-	header     *Header
-	payload    []byte
-	sourceAddr *Addr
-}
-
-// compact compresses a packet into a byte array
-func (p *Packet) compact() []byte {
-	var packet [524]byte
-	header := p.header.compact()
-
-	copy(packet[:], append(header[:], p.payload[:]...))
-	return packet[:12+len(p.payload)]
-}
-
 // newAddr creates a new struct Addr
 func newAddr(addr *net.UDPAddr) *Addr {
 	return &Addr{udpAddr: addr}
-}
-
-func newPacket(header *Header, payload []byte, sourceAddr *Addr) *Packet {
-	return &Packet{
-		header:     header,
-		payload:    payload,
-		sourceAddr: sourceAddr,
-	}
-}
-
-// decompactPacket decompresses a byte array into a Packet struct
-func decompactPacket(packet []byte, sourceAddr *Addr) *Packet {
-	var header [12]byte
-	copy(header[:], packet[0:12])
-
-	var payload = make([]byte, 524)
-	if len(packet) > 12 {
-		copy(payload, packet[12:])
-	}
-
-	return &Packet{
-		header:     decompactHeader(&header),
-		payload:    payload[:len(packet)-12],
-		sourceAddr: sourceAddr,
-	}
 }
 
 // String parses to string
@@ -78,7 +37,8 @@ func Listen(addr *Addr) (*Listener, error) {
 	}
 
 	l := newListener(addr, udpConn)
-	l.listenPacket()
+
+	listenPacket(l.udpConn, l.demultiplexer)
 
 	return l, nil
 }
@@ -86,54 +46,53 @@ func Listen(addr *Addr) (*Listener, error) {
 // Connect connects to a server
 func Connect(remoteAddr *Addr) (*ConnServer, error) {
 	debug("Connecting to a server")
-	addr, err := net.ResolveUDPAddr("udp", remoteAddr.udpAddr.IP.String()+":0")
+
+	localAddr, err := ResolveName(remoteAddr.udpAddr.IP.String() + ":0")
 	if err != nil {
 		return nil, err
 	}
-	localAddr := newAddr(addr)
 
-	udpConn, err := net.DialUDP("udp", addr, remoteAddr.udpAddr)
+	udpConn, err := net.DialUDP("udp", localAddr.udpAddr, remoteAddr.udpAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	debug("Sending SYN packet")
-	header := newHeader(12345, 0, 0,
-		false, true, false)
-	packet := newPacket(header, nil, localAddr)
-
-	_, err = udpConn.Write(packet.compact())
+	_, err = writePacket(udpConn, newSYNPacket(localAddr))
 	if err != nil {
 		return nil, err
 	}
 
-	for !packet.header.syn || !packet.header.ack {
+	var packet *Packet
+	for !packet.header.syn || !packet.header.ack { // FIXME verify packet == nil
 		debug("Waiting SYN-ACK packet")
-		var response [524]byte
-		n, addr, err := udpConn.ReadFromUDP(response[:])
+
+		// FIXME remove
+		//var response [524]byte
+		//n, addr, err := udpConn.ReadFromUDP(response[:])
+		//if err != nil {
+		//	return nil, err
+		//}
+		//packet = decompactPacket(response[:n], newAddr(addr))
+
+		packet, err = readPacket(udpConn)
 		if err != nil {
 			return nil, err
 		}
-
-		packet = decompactPacket(response[:n], newAddr(addr))
 	}
 
 	debug("Sending ACK packet")
-	header = newHeader(
-		packet.header.ackNum,
-		packet.header.seqNum+1,
-		packet.header.connID,
-		true, false, false,
-	)
-	packet = newPacket(header, nil, localAddr)
+	packet = newACKPacket(packet.header.ackNum, packet.header.seqNum+1,
+		packet.header.connID, localAddr)
 
-	_, err = udpConn.Write(packet.compact()[:])
+	_, err = writePacket(udpConn, packet)
 	if err != nil {
 		return nil, err
 	}
 	debug("Handshaking DONE")
 
 	conn := newConnServer(udpConn, remoteAddr, packet.header.connID)
+	conn.sendPacket()
 
 	return conn, nil
 }

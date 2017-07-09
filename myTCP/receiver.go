@@ -1,124 +1,105 @@
 package myTCP
 
 import (
-	"sync"
 	"net"
+	"io"
+	"strconv"
 )
 
-// Listener is a MyTCP network listener.
-type Listener struct {
-	addr       *Addr
-	udpConn    *net.UDPConn
-	newConn    chan *Packet
-	conns      map[uint16]*ConnClient
-	connsMutex *sync.RWMutex
-}
+// FIXME remove
+//// Listen UDP packets.
+//func (l *Listener) listenPacket() {
+//	go func() {
+//		for {
+//			packet := readPacket(l.udpConn)
+//
+//			go l.demultiplexer(packet)
+//		}
+//	}()
+//}
 
-// newAddr creates a new struct Addr.
-func newListener(addr *Addr, udpConn *net.UDPConn) *Listener {
-	return &Listener{
-		addr:       addr,
-		udpConn:    udpConn,
-		newConn:    make(chan *Packet),
-		conns:      make(map[uint16]*ConnClient),
-		connsMutex: &sync.RWMutex{},
-	}
-}
-
-// Wait for the next connection on a channel and return it to the listener.
-func (l *Listener) Accept() (ConnClient, error) {
-	var conn ConnClient
-	for packet := range l.newConn {
-		if packet.header.syn {
-			debug("Receiving SYN packet")
-			conn = *newConnClient(packet.sourceAddr)
-
-			debug("Sending SYN-ACK packet")
-			header := newHeader(
-				4321,
-				packet.header.seqNum+1,
-				conn.ID,
-				true, true, false,
-			)
-			packet = newPacket(header, nil, l.addr)
-
-			_, err := l.udpConn.WriteToUDP(packet.compact(), conn.remoteAddr.udpAddr)
-			if err != nil {
-				return ConnClient{}, err
-			}
-		} else if packet.header.ackNum == 4321+1 {
-			debug("Receiving ACK packet")
-
-			l.saveConn(&conn)
-			debug("Handshaking DONE")
-			return conn, nil
-		}
-	}
-	return ConnClient{}, nil
-}
-
-// Close stops listening on the TCP address.
-func (l *Listener) Close() {
-	close(l.newConn)
-	l.udpConn.Close()
-}
-
-// searchConn searches for a saved connection by the connID.
-func (l *Listener) searchConn(connID uint16) (*ConnClient, bool) {
-	l.connsMutex.RLock() // Mutual exclusion (reading)
-	conn, exists := l.conns[connID]
-	l.connsMutex.RUnlock()
-
-	return conn, exists
-}
-
-// Save a connection on the list.
-func (l *Listener) saveConn(conn *ConnClient) {
-	l.connsMutex.Lock() // Mutual exclusion (writing)
-	l.conns[conn.ID] = conn
-	l.connsMutex.Unlock()
-}
-
-// deleteConn removes a saved connection, searching by the connID.
-func (l *Listener) deleteConn(connID uint16) {
-	l.connsMutex.Lock() // Mutual exclusion (writing)
-	delete(l.conns, connID)
-	l.connsMutex.Unlock()
-}
-
-// listenPacket listens UDP packets.
-func (l *Listener) listenPacket() {
+// Listen UDP packets.
+func listenPacket(udpConn *net.UDPConn, demux func(*Packet)) {
 	go func() {
 		for {
-			packetByte, addr := l.readPacket()
+			packet, err := readPacket(udpConn)
+			checkError(err)
 
-			go l.demultiplexer(packetByte, addr)
+			go demux(packet)
 		}
 	}()
 }
 
 // Get packet from network.
-func (l *Listener) readPacket() ([]byte, *Addr) {
+func readPacket(udpConn *net.UDPConn) (*Packet, error) {
 	buffer := make([]byte, 524)
-	n, addr, err := l.udpConn.ReadFromUDP(buffer)
-	checkError(err)
+	n, addr, err := udpConn.ReadFromUDP(buffer)
+	if err != nil {
+		return nil, err
+	}
 
-	return buffer[:n], newAddr(addr)
+	packet := decompactPacket(buffer[:n], newAddr(addr))
+
+	return packet, nil
 }
 
-// Differentiate the received packet and forwards it to the right place.
-func (l *Listener) demultiplexer(packetByte []byte, addr *Addr) {
-	packet := decompactPacket(packetByte, addr)
+// Take a packet from a connection, copying the payload into p
+func (c ConnClient) Read(p []byte) (n int, err error) {
+	debug("READING " + strconv.Itoa(len(p)) + " bytes")
+	//	TODO Read: coordinate receiving of packets,
+	// 				create packet/payload BUFFER,
+	// 				return only until the requested size
 
-	if packet.header.syn || packet.header.ackNum == 4321+1 {
-		l.newConn <- packet
-	} else {
-		conn, exists := l.searchConn(packet.header.connID)
-		if exists {
-			conn.newPacket <- packet
-		} else {
-			// PACKET WITHOUT SYN WITHOUT KNOWN ID
-			// IGNORE?
+	for {
+		select {
+		case packet := <-c.newPacket:
+			payload := packet.payload
+
+			// TODO detect fin and return EOF
+			//if len(payload) == 0{
+			//	break
+			//}
+
+			copy(p[n:n+len(payload)], payload)
+
+			debug("A: " + string(payload))
+			debug("B: " + string(p[n:n+len(payload)]))
+
+			n += len(payload)
+
+			// TODO send ACK
+
+			// TODO keep payload rest, if it doesnt fit in p buffer
+
+			if len(payload) < 512 {
+				debug("LITTLE MESSAGE")
+				err = io.EOF
+				break
+			}
+
+			if n >= len(p) {
+				break
+			}
+			//if len(p) <= 512 {
+			//	debug("LITTLE MESSAGE")
+			//
+			//} else {
+			//	debug("BIG MESSAGE")
+			//
+			//
+			//
+			//	panic("IIIIIIIIIII")
+			//}
+		case <-c.timeoutInative:
+			c.Close()
 		}
 	}
+
+	debug("OK")
+
+	// TODO verifies when Copy func stops reading
+	//c.Close()
+
+	// TODO catch some error
+	return n, err
 }

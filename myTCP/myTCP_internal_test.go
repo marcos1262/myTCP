@@ -116,7 +116,7 @@ func TestReceivePacket(t *testing.T) {
 
 	l.demultiplexer(packet.compact(), addr)
 
-	conn := newConn(nil, addr, 0)
+	conn := newConnClient(addr)
 	l.conns[1] = conn
 	header = newHeader(
 		4321,
