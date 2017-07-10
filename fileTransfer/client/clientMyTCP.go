@@ -21,7 +21,7 @@ func ListenServer(in *bufio.Reader) {
 }
 
 func main() {
-	host, port, filename := "127.0.0.1", "10101", "test.txt"
+	host, port, filename := "127.0.0.1", "10101", "large.txt"
 	//flag.StringVar(&host, "h", "", "Give a hostname with -h=#####")
 	//flag.StringVar(&port, "p", "", "Give a port with -p=#####")
 	//flag.StringVar(&filename, "f", "", "Give a filename with -f=#####")

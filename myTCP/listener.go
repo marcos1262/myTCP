@@ -33,7 +33,7 @@ func (l *Listener) Accept() (ConnClient, error) {
 	for packet := range l.newConn {
 		if packet.header.syn {
 			debug("Receiving SYN packet")
-			conn = *newConnClient(packet.sourceAddr)
+			conn = *newConnClient(packet.sourceAddr, l)
 
 			debug("Sending SYN-ACK packet")
 			packet = newSYNACKPacket(conn.ID, l.addr)
@@ -88,7 +88,7 @@ func (l *Listener) demultiplexer(packet *Packet) {
 	} else {
 		conn, exists := l.searchConn(packet.header.connID)
 		if exists {
-			conn.timeoutInative = time.After(10 * time.Second)
+			conn.timeoutInactive = time.After(10 * time.Second)
 			conn.newPacket <- packet
 		} else {
 			// PACKET WITHOUT SYN WITHOUT KNOWN ID

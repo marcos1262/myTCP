@@ -47,6 +47,7 @@ func Listen(addr *Addr) (*Listener, error) {
 func Connect(remoteAddr *Addr) (*ConnServer, error) {
 	debug("Connecting to a server")
 
+	// TODO receive local addr from client, or catch from OS
 	localAddr, err := ResolveName(remoteAddr.udpAddr.IP.String() + ":0")
 	if err != nil {
 		return nil, err
@@ -58,13 +59,13 @@ func Connect(remoteAddr *Addr) (*ConnServer, error) {
 	}
 
 	debug("Sending SYN packet")
-	_, err = writePacket(udpConn, newSYNPacket(localAddr))
+	_, err = writePacketToConn(udpConn, newSYNPacket(localAddr))
 	if err != nil {
 		return nil, err
 	}
 
 	var packet *Packet
-	for !packet.header.syn || !packet.header.ack { // FIXME verify packet == nil
+	for packet == nil || !packet.header.syn || !packet.header.ack { // FIXME verify packet == nil
 		debug("Waiting SYN-ACK packet")
 
 		// FIXME remove
@@ -85,14 +86,19 @@ func Connect(remoteAddr *Addr) (*ConnServer, error) {
 	packet = newACKPacket(packet.header.ackNum, packet.header.seqNum+1,
 		packet.header.connID, localAddr)
 
-	_, err = writePacket(udpConn, packet)
+	_, err = writePacketToConn(udpConn, packet)
 	if err != nil {
 		return nil, err
 	}
 	debug("Handshaking DONE")
 
-	conn := newConnServer(udpConn, remoteAddr, packet.header.connID)
+	conn := newConnServer(udpConn, localAddr, remoteAddr, packet.header.connID)
+
+	// Start the routine for sending packets (data)
 	conn.sendPacket()
+
+	// Start the routine for receiving packets (ack)
+	listenPacket(conn.udpConn, conn.demultiplexer)
 
 	return conn, nil
 }

@@ -22,37 +22,44 @@ type conn struct {
 
 type ConnServer struct {
 	*conn
-	udpConn    *net.UDPConn
-	window     window
-	outPacket  chan *Packet
-	timeoutAck <-chan time.Time
+	udpConn   *net.UDPConn
+	localAddr *Addr
+	window    window
+	resultWrite chan error
+	outPacket  chan []byte
+	ackPacket chan *Packet
 }
 
 type ConnClient struct {
 	*conn
-	newPacket      chan *Packet
-	timeoutInative <-chan time.Time
+	listener        *Listener
+	newPacket       chan *Packet
+	timeoutInactive <-chan time.Time
 }
 
 // Create a new struct ConnServer.
-func newConnServer(udpConn *net.UDPConn, remoteAddr *Addr, id uint16) *ConnServer {
+func newConnServer(udpConn *net.UDPConn, localAddr *Addr, remoteAddr *Addr, id uint16) *ConnServer {
 	return &ConnServer{
 		conn: &conn{
 			ID:         id,
 			remoteAddr: remoteAddr,
 		},
 		udpConn:   udpConn,
-		outPacket: make(chan *Packet),
+		localAddr: localAddr,
+		resultWrite: make(chan error),
+		outPacket: make(chan []byte),
+		ackPacket: make(chan *Packet),
 	}
 }
 
 // Create a new struct ConnClient.
-func newConnClient(remoteAddr *Addr) *ConnClient {
+func newConnClient(remoteAddr *Addr, listener *Listener) *ConnClient {
 	return &ConnClient{
 		conn: &conn{
 			ID:         generateID(),
 			remoteAddr: remoteAddr,
 		},
+		listener:listener,
 		newPacket: make(chan *Packet),
 	}
 }
@@ -79,7 +86,7 @@ func (c ConnClient) Close() error {
 // FIXME remove
 //func (c *ConnClient) connTimeout(timeSeconds time.Duration) {
 //	time.Sleep(timeSeconds * time.Second)
-//	c.timeoutInative <- true
+//	c.timeoutInactive <- true
 //}
 
 // TODO implement ConnServer Read

@@ -4,6 +4,8 @@ import (
 	"net"
 	"io"
 	"strconv"
+	"time"
+	"errors"
 )
 
 // FIXME remove
@@ -50,9 +52,23 @@ func (c ConnClient) Read(p []byte) (n int, err error) {
 	// 				create packet/payload BUFFER,
 	// 				return only until the requested size
 
+	expectedSeqNum := initialSeqNum
+
+reading:
 	for {
 		select {
 		case packet := <-c.newPacket:
+			go func() {
+				<-c.timeoutInactive // receive old timeout
+			}()
+			c.timeoutInactive = time.After(10 * time.Second)
+
+			if packet.header.seqNum != expectedSeqNum {
+				debug("E: " + strconv.Itoa(int(expectedSeqNum)) + ", G: " + strconv.Itoa(int(packet.header.seqNum)))
+				debug("Discarding packet out of order...")
+				break
+			}
+
 			payload := packet.payload
 
 			// TODO detect fin and return EOF
@@ -62,23 +78,29 @@ func (c ConnClient) Read(p []byte) (n int, err error) {
 
 			copy(p[n:n+len(payload)], payload)
 
-			debug("A: " + string(payload))
-			debug("B: " + string(p[n:n+len(payload)]))
-
 			n += len(payload)
 
-			// TODO send ACK
+			expectedSeqNum = packet.header.seqNum + uint32(len(payload))
+
+			//debug("seqNum received: " + strconv.Itoa(int(packet.header.seqNum)))
+			//debug("SENDING ACK ackNum:" + strconv.Itoa(int(expectedSeqNum)))
+			ack := newACKPacket(packet.header.ackNum, expectedSeqNum, c.ID, c.listener.addr)
+			_, err := writePacketToAddr(c.listener.udpConn, c.remoteAddr, ack)
+			if err != nil {
+				return 0, err
+			}
 
 			// TODO keep payload rest, if it doesnt fit in p buffer
 
 			if len(payload) < 512 {
 				debug("LITTLE MESSAGE")
 				err = io.EOF
-				break
+				return n, err
 			}
 
 			if n >= len(p) {
-				break
+				debug("RECEIVED ALL")
+				break reading
 			}
 			//if len(p) <= 512 {
 			//	debug("LITTLE MESSAGE")
@@ -90,12 +112,13 @@ func (c ConnClient) Read(p []byte) (n int, err error) {
 			//
 			//	panic("IIIIIIIIIII")
 			//}
-		case <-c.timeoutInative:
+		case <-c.timeoutInactive:
+			debug("TIMEOUT INACTIVE connID:" + strconv.Itoa(int(c.ID)))
 			c.Close()
+			err = errors.New("Client inactive for 10s")
+			break reading
 		}
 	}
-
-	debug("OK")
 
 	// TODO verifies when Copy func stops reading
 	//c.Close()
