@@ -40,7 +40,11 @@ func (c *Client) Read() {
 	defer file.Close()
 
 	n, err := io.Copy(file, c.conn)
-	checkError(err)
+	if err != nil {
+		if err.Error() == "Client inactive for 10s" {
+			c.conn.Close()
+		}
+	}
 
 	debug("Received " + strconv.Itoa(int(n)) + " bytes from client " + strconv.Itoa(int(c.ID)))
 

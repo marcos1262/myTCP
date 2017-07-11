@@ -22,19 +22,21 @@ type conn struct {
 
 type ConnServer struct {
 	*conn
-	udpConn   *net.UDPConn
-	localAddr *Addr
-	window    window
-	resultWrite chan error
-	outPacket  chan []byte
-	ackPacket chan *Packet
+	udpConn     *net.UDPConn // connection with a server
+	localAddr   *Addr        // local address
+	window      window       // window for sending data
+	resultWrite chan error   // to wait for the writing to end
+	outPacket   chan []byte  // to send data for the sender routine
+	ackPacket   chan *Packet // to receive ack from the client listener
 }
 
 type ConnClient struct {
 	*conn
-	listener        *Listener
-	newPacket       chan *Packet
-	timeoutInactive <-chan time.Time
+	listener        *Listener        // listener that keep the conn
+	newPacket       chan *Packet     // to receive data from network
+	getData         chan []byte      // to get data from client
+	resultRead      chan resultRead       // to wait for the reading to end
+	timeoutInactive <-chan time.Time // for when the client stay inactive for a long time
 }
 
 // Create a new struct ConnServer.
@@ -44,24 +46,30 @@ func newConnServer(udpConn *net.UDPConn, localAddr *Addr, remoteAddr *Addr, id u
 			ID:         id,
 			remoteAddr: remoteAddr,
 		},
-		udpConn:   udpConn,
-		localAddr: localAddr,
+		udpConn:     udpConn,
+		localAddr:   localAddr,
 		resultWrite: make(chan error),
-		outPacket: make(chan []byte),
-		ackPacket: make(chan *Packet),
+		outPacket:   make(chan []byte),
+		ackPacket:   make(chan *Packet),
 	}
 }
 
 // Create a new struct ConnClient.
 func newConnClient(remoteAddr *Addr, listener *Listener) *ConnClient {
-	return &ConnClient{
+	conn := &ConnClient{
 		conn: &conn{
 			ID:         generateID(),
 			remoteAddr: remoteAddr,
 		},
-		listener:listener,
+		listener:  listener,
 		newPacket: make(chan *Packet),
+		resultRead: make(chan resultRead),
+		getData:   make(chan []byte),
 	}
+
+	conn.receivePacket()
+
+	return conn
 }
 
 func (c conn) RemoteAddr() *Addr {
